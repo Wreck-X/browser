@@ -4,9 +4,8 @@ use gtk::Application;
 use crate::browser::Browser;
 use crate::ui;
 
-
 pub struct App {
-   app: Application,
+    app: Application,
 }
 
 impl App {
@@ -14,11 +13,12 @@ impl App {
         let app = Application::builder()
             .application_id("application.le_browser")
             .build();
-        App {app}
+
+        App { app }
     }
 
     pub fn run(&self) {
-            self.app.connect_activate(|app| {
+        self.app.connect_activate(|app| {
             let browser = Browser::new();
             browser.load_url("https://www.wikipedia.org");
 
