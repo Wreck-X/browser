@@ -1,6 +1,6 @@
 use gtk::Box as GtkBox;
-use gtk::gio;
 use gtk::Orientation;
+use gtk::gio;
 use gtk::prelude::*;
 use webkit2gtk::{LoadEvent, WebContext, WebView, WebViewExt};
 
