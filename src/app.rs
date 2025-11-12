@@ -1,5 +1,5 @@
-use gtk::Application;
 use gtk::prelude::*;
+use gtk::Application;
 
 use crate::browser::Browser;
 use crate::ui;
@@ -17,7 +17,7 @@ impl App {
     }
 
     pub fn run(&self) {
-        self.app.connect_activate(|app| {
+        self.app.connect_activate(|app| {1
             let browser = Browser::new();
             browser.load_url("https://www.wikipedia.org");
 
