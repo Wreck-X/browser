@@ -44,7 +44,7 @@ fn main() {
 
     let settings = WebViewExt::settings(&webview).unwrap();
     settings.set_enable_developer_extras(true);
-    //test
+    
     /*let inspector = webview.get_inspector().unwrap();
     inspector.show();*/
 
