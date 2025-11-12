@@ -1,4 +1,4 @@
-use gtk::{Application, ApplicationWindow, Box as GtkBox};
+use gtk4::{Application, ApplicationWindow, Box as GtkBox};
 
 pub fn build_window(app: &Application, title: &str, content: GtkBox) -> ApplicationWindow {
     let win = ApplicationWindow::builder()
