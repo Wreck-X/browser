@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<interface>
+  <template class="tilde" parent="GtkApplicationWindow">
+    <property name="title">le browser</property>
+    <property name="show-menubar">1</property>
+  </template>
+</interface>
