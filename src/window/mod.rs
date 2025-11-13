@@ -1,7 +1,11 @@
 mod imp;
 
-use glib::Object;
-use gtk4::{Application, gio, glib};
+use glib::{Object, subclass::types::ObjectSubclassIsExt};
+use gtk4::{
+    Application, gio, glib,
+    prelude::{BoxExt, WidgetExt},
+};
+use webkit6::{WebView, prelude::WebViewExt};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -13,5 +17,22 @@ glib::wrapper! {
 impl Window {
     pub fn new(app: &Application) -> Self {
         Object::builder().property("application", app).build()
+    }
+
+    fn setup_webview(&self) {
+        let imp = self.imp();
+
+        let webview = WebView::new();
+        webview.load_uri("https://www.duckduckgo.com");
+
+        webview.set_vexpand(true);
+        webview.set_hexpand(true);
+
+        imp.webview_box.append(&webview);
+        imp.webview.replace(Some(webview.clone()));
+
+        webview.connect_load_changed(|webview, load_event| {
+            println!("load event: {:?}", load_event);
+        });
     }
 }

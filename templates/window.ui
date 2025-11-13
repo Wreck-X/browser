@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <interface>
   <template class="tilde" parent="GtkApplicationWindow">
-    <property name="title">le browser</property>
-    <property name="show-menubar">1</property>
+    <property name="title">tilde</property>
+    <property name="default-width">1200</property>
+    <property name="default-height">800</property>
+
+    <child>
+      <object class="GtkBox" id="body_box">
+        <property name="orientation">vertical</property>
+
+        <child>
+          <object class="GtkBox" id="webview_box">
+            <property name="vexpand">true</property>
+            <property name="hexpand">true</property>
+          </object>
+        </child>
+      </object>
+    </child>
   </template>
 </interface>
