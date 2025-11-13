@@ -1,17 +1,12 @@
-use std::cell::RefCell;
-
 use glib::subclass::InitializingObject;
 use gtk4::subclass::prelude::*;
-use gtk4::{Box as GtkBox, CompositeTemplate, glib};
-use webkit6::WebView;
+use gtk4::{CompositeTemplate, Notebook, glib};
 
 #[derive(CompositeTemplate, Default)]
 #[template(resource = "/templates/window.ui")]
 pub struct Window {
     #[template_child]
-    pub webview_box: TemplateChild<GtkBox>,
-
-    pub webview: RefCell<Option<WebView>>,
+    pub notebook: TemplateChild<Notebook>,
 }
 
 #[glib::object_subclass]
@@ -33,7 +28,8 @@ impl ObjectImpl for Window {
     fn constructed(&self) {
         self.parent_constructed();
 
-        self.obj().setup_webview();
+        self.obj().setup_shortcuts();
+        self.obj().new_tab("https://duckduckgo.com");
     }
 }
 

@@ -6,15 +6,9 @@
     <property name="default-height">800</property>
 
     <child>
-      <object class="GtkBox" id="body_box">
-        <property name="orientation">vertical</property>
-
-        <child>
-          <object class="GtkBox" id="webview_box">
-            <property name="vexpand">true</property>
-            <property name="hexpand">true</property>
-          </object>
-        </child>
+      <object class="GtkNotebook" id="notebook">
+        <property name="show-tabs">false</property>
+        <property name="show-border">false</property>
       </object>
     </child>
   </template>
