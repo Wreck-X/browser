@@ -2,7 +2,7 @@ mod imp;
 
 use glib::{Object, subclass::types::ObjectSubclassIsExt};
 use gtk4::{
-    Application, EventControllerKey,
+    Application, CssProvider, EventControllerKey,
     gdk::{self, ModifierType},
     gio, glib,
     prelude::WidgetExt,
@@ -20,6 +20,17 @@ glib::wrapper! {
 impl Window {
     pub fn new(app: &Application) -> Self {
         Object::builder().property("application", app).build()
+    }
+
+    fn load_css(&self) {
+        let provider = CssProvider::new();
+        provider.load_from_resource("/templates/style.css");
+
+        gtk4::style_context_add_provider_for_display(
+            &self.display(),
+            &provider,
+            gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
     }
 
     fn setup_shortcuts(&self) {
@@ -41,11 +52,26 @@ impl Window {
                     return glib::Propagation::Stop;
                 }
 
+                if modifier.contains(ModifierType::SHIFT_MASK) && key == gdk::Key::asciitilde {
+                    window.toggle_command_palette();
+                    return glib::Propagation::Stop;
+                }
+
                 glib::Propagation::Proceed
             }
         ));
 
         self.add_controller(key_controller);
+    }
+
+    fn toggle_command_palette(&self) {
+        let imp = self.imp();
+
+        if imp.command_palette_container.is_visible() {
+            imp.command_palette_container.set_visible(false);
+        } else {
+            imp.command_palette_container.set_visible(true);
+        }
     }
 
     fn new_tab(&self, uri: &str) {

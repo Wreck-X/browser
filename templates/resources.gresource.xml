@@ -2,5 +2,6 @@
 <gresources>
   <gresource prefix="/templates/">
     <file compressed="true" preprocess="xml-stripblanks">window.ui</file>
+    <file>style.css</file>
   </gresource>
 </gresources>
