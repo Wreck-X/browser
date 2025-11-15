@@ -1,6 +1,11 @@
 mod imp;
 
-use glib::{Object, subclass::types::ObjectSubclassIsExt};
+use glib::{
+    Object,
+    gobject_ffi::g_object_new,
+    object::{Cast, ObjectExt},
+    subclass::types::ObjectSubclassIsExt,
+};
 use gtk4::{
     Application, CssProvider, EventControllerKey,
     gdk::{self, ModifierType},
@@ -8,7 +13,7 @@ use gtk4::{
     prelude::WidgetExt,
 };
 use rand::Rng as _;
-use webkit6::{WebView, prelude::WebViewExt};
+use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -42,6 +47,31 @@ impl Window {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_controller, key, _code, modifier| {
+                if modifier.is_empty() {
+                    if let Some(webview) = window.current_webview() {
+                        unsafe {
+                            let editable: bool =
+                                unsafe { *webview.data::<bool>("is_editable").unwrap().as_ptr() };
+
+                            if !editable {
+                                match key {
+                                    gdk::Key::k => {
+                                        webview.evaluate_javascript(
+                                            "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' });
+",
+                                            None,
+                                            None,
+                                            None::<&gio::Cancellable>,
+                                            |_| {},
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if modifier.contains(ModifierType::SHIFT_MASK) && key == gdk::Key::Return {
                     let mut rng = rand::thread_rng();
                     let idx = rng.gen_range(0..2);
@@ -64,6 +94,14 @@ impl Window {
         self.add_controller(key_controller);
     }
 
+    fn current_webview(&self) -> Option<WebView> {
+        let imp = self.imp();
+        let current_page = imp.notebook.current_page();
+        let page = imp.notebook.nth_page(current_page)?;
+
+        page.downcast::<WebView>().ok()
+    }
+
     fn toggle_command_palette(&self) {
         let imp = self.imp();
 
@@ -77,7 +115,49 @@ impl Window {
     fn new_tab(&self, uri: &str) {
         let imp = self.imp();
         let notebook = &imp.notebook;
-        let webview = WebView::new();
+        let ucm = UserContentManager::new();
+        let webview: WebView = Object::builder()
+            .property("user-content-manager", &ucm)
+            .build();
+
+        let webview_c = webview.clone();
+
+        ucm.register_script_message_handler("editState", None);
+        ucm.connect_script_message_received(Some("editState"), move |_m, msg| {
+            let is_editable = msg.clone();
+            println!("editable: {}", is_editable);
+            unsafe {
+                webview_c.set_data("is_editable", is_editable);
+            }
+        });
+
+        let js = r#"
+            function updateEditState() {
+                let el = document.activeElement;
+                let isEditable =
+                    el &&
+                    (
+                        el.isContentEditable ||
+                        el.tagName === "INPUT" ||
+                        el.tagName === "TEXTAREA" ||
+                        el.getAttribute('role') === 'textbox'
+                    );
+                window.webkit.messageHandlers.editState.postMessage(isEditable);
+            }
+
+            document.addEventListener('focusin', updateEditState);
+            document.addEventListener('focusout', updateEditState);
+            document.addEventListener('selectionchange', updateEditState);
+            updateEditState();
+        "#;
+        let script = UserScript::new(
+            js,
+            webkit6::UserContentInjectedFrames::AllFrames,
+            webkit6::UserScriptInjectionTime::Start,
+            &[],
+            &[],
+        );
+        ucm.add_script(&script);
 
         webview.set_vexpand(true);
         webview.set_hexpand(true);
