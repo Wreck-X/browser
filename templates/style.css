@@ -41,3 +41,68 @@
     color: rgba(100, 200, 100, 1);
     font-style: italic;
 }
+
+/* Command Palette */
+.cmd_plt {
+    background: rgba(30, 30, 30, 0.98);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.results_list {
+    background: transparent;
+    border: none;
+}
+
+.results_list row {
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 4px 0;
+    transition: all 200ms ease;
+}
+
+.results_list row:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.results_list row:selected {
+    background: rgba(100, 150, 255, 0.4);
+}
+
+.tab-title {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.tab-url {
+    font-size: 12px;
+    opacity: 0.7;
+    margin-top: 4px;
+}
+
+.new-tab-indicator {
+    color: rgba(100, 200, 100, 1);
+    font-style: italic;
+}
+
+/* Dock */
+.dock {
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(10px);
+    border-radius: 16px;
+    padding: 12px 24px;
+    box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.dock-icon {
+    font-size: 18px;
+}
+
+.dock-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+}

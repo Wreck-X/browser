@@ -1,65 +1,183 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <interface>
-  <template class="tilde" parent="GtkApplicationWindow">
-    <property name="title">tilde</property>
-    <property name="default-width">1200</property>
-    <property name="default-height">800</property>
-
-    <child>
-      <object class="GtkOverlay" id="main_overlay">
+    <template class="tilde" parent="GtkApplicationWindow">
+        <property name="title">tilde</property>
+        <property name="default-width">1200</property>
+        <property name="default-height">800</property>
 
         <child>
-          <object class="GtkNotebook" id="notebook">
-            <property name="show-tabs">false</property>
-            <property name="show-border">false</property>
-          </object>
-        </child>
-
-        <child type="overlay">
-          <object class="GtkBox" id="command_palette_container">
-            <property name="visible">false</property>
-            <property name="orientation">vertical</property>
-            <property name="halign">center</property>
-            <property name="valign">start</property>
-            <property name="margin-top">100</property>
-            <property name="width-request">700</property>
-            <property name="spacing">0</property>
-
-            <style>
-              <class name="command-palette" />
-            </style>
-
-            <child>
-              <object class="GtkSearchEntry" id="command_entry">
-                <property name="placeholder-text">type</property>
-                <property name="hexpand">true</property>
-              </object>
-            </child>
-
-            <child>
-              <object class="GtkScrolledWindow" id="results_scroll">
-                <property name="max-content-height">400</property>
-                <property name="propagate-natural-height">true</property>
-                <property name="vexpand">true</property>
+            <object class="GtkOverlay" id="main_overlay">
 
                 <child>
-                  <object class="GtkListBox" id="results_lists">
-                  <property name="selection-mode">single</property>
-
-                  <style>
-                    <class name="results_list" />
-                  </style>
-                  </object>
+                    <object class="GtkNotebook" id="notebook">
+                        <property name="show-tabs">false</property>
+                        <property name="show-border">false</property>
+                    </object>
                 </child>
 
-              </object>
-            </child>
+                <child type="overlay">
+                    <object class="GtkBox" id="command_palette_container">
+                        <property name="visible">false</property>
+                        <property name="orientation">vertical</property>
+                        <property name="halign">center</property>
+                        <property name="valign">start</property>
+                        <property name="margin-top">100</property>
+                        <property name="width-request">700</property>
+                        <property name="spacing">0</property>
 
-          </object>
+                        <style>
+                            <class name="command-palette" />
+                        </style>
+
+                        <child>
+                            <object class="GtkSearchEntry" id="command_entry">
+                                <property
+                                    name="placeholder-text"
+                                >type</property>
+                                <property name="hexpand">true</property>
+                            </object>
+                        </child>
+
+                        <child>
+                            <object
+                                class="GtkScrolledWindow"
+                                id="results_scroll"
+                            >
+                                <property
+                                    name="max-content-height"
+                                >400</property>
+                                <property
+                                    name="propagate-natural-height"
+                                >true</property>
+                                <property name="vexpand">true</property>
+
+                                <child>
+                                    <object
+                                        class="GtkListBox"
+                                        id="results_list"
+                                    >
+                                        <property
+                                            name="selection-mode"
+                                        >single</property>
+
+                                        <style>
+                                            <class name="results_list" />
+                                        </style>
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+
+                <child type="overlay">
+                    <object class="GtkRevealer" id="dock_revealer">
+                        <property name="transition-type">crossfade</property>
+                        <property name="transition-duration">200</property>
+                        <property name="reveal-child">false</property>
+                        <property name="halign">fill</property>
+                        <property name="valign">end</property>
+
+                        <child>
+                            <object class="GtkBox">
+                                <property
+                                    name="orientation"
+                                >horiztonal</property>
+                                <property name="height-request">40</property>
+                                <style>
+                                    <class name="dock" />
+                                </style>
+
+                                <child>
+                                    <object class="GtkBox" id="dock_left">
+                                        <property name="halign">start</property>
+                                        <property name="hexpand">true</property>
+                                        <property name="spacing">12</property>
+                                        <property
+                                            name="margin-start"
+                                        >20</property>
+                                        <style>
+                                            <class name="dock-section" />
+                                        </style>
+
+                                        <child>
+                                            <object
+                                                class="GtkLabel"
+                                                id="profile_label"
+                                            >
+                                                <property
+                                                    name="label"
+                                                >default</property>
+                                                <style>
+                                                    <class name="dock-text" />
+                                                </style>
+                                            </object>
+                                        </child>
+
+                                    </object>
+                                </child>
+
+                                <child>
+                                    <object class="GtkBox" id="dock_center">
+                                        <property
+                                            name="halign"
+                                        >center</property>
+                                        <property name="spacing">12</property>
+                                        <style>
+                                            <class name="dock-section" />
+                                        </style>
+
+                                        <child>
+                                            <object
+                                                class="GtkLabel"
+                                                id="uri_label"
+                                            >
+                                                <property
+                                                    name="label"
+                                                >default</property>
+                                                <style>
+                                                    <class name="dock-text" />
+                                                </style>
+                                            </object>
+                                        </child>
+
+                                    </object>
+                                </child>
+
+                                <child>
+                                    <object class="GtkBox" id="dock_right">
+                                        <property name="halign">end</property>
+                                        <property name="spacing">12</property>
+                                        <property
+                                            name="margin-end"
+                                        >20</property>
+                                        <property name="hexpand">true</property>
+
+                                        <style>
+                                            <class name="dock-section" />
+                                        </style>
+
+                                        <child>
+                                            <object
+                                                class="GtkLabel"
+                                                id="tab_label"
+                                            >
+                                                <property
+                                                    name="label"
+                                                >no page</property>
+                                                <style>
+                                                    <class name="dock-text" />
+                                                </style>
+                                            </object>
+                                        </child>
+
+                                    </object>
+                                </child>
+                            </object>
+                        </child>
+                    </object>
+                </child>
+            </object>
         </child>
-
-      </object>
-
-    </child>
-  </template>
+    </template>
 </interface>

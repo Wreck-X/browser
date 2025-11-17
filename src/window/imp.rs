@@ -1,6 +1,8 @@
 use glib::subclass::InitializingObject;
 use gtk4::subclass::prelude::*;
-use gtk4::{Box as GtkBox, CompositeTemplate, ListBox, Notebook, SearchEntry, glib};
+use gtk4::{
+    Box as GtkBox, CompositeTemplate, Label, ListBox, Notebook, Revealer, SearchEntry, glib,
+};
 
 #[derive(CompositeTemplate, Default)]
 #[template(resource = "/templates/window.ui")]
@@ -12,7 +14,16 @@ pub struct Window {
     #[template_child]
     pub command_entry: TemplateChild<SearchEntry>,
     #[template_child]
-    pub results_lists: TemplateChild<ListBox>,
+    pub results_list: TemplateChild<ListBox>,
+
+    #[template_child]
+    pub dock_revealer: TemplateChild<Revealer>,
+    #[template_child]
+    pub profile_label: TemplateChild<Label>,
+    #[template_child]
+    pub uri_label: TemplateChild<Label>,
+    #[template_child]
+    pub tab_label: TemplateChild<Label>,
 }
 
 #[glib::object_subclass]

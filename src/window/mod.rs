@@ -2,7 +2,6 @@ mod imp;
 
 use glib::{
     Object,
-    gobject_ffi::g_object_new,
     object::{Cast, ObjectExt},
     subclass::types::ObjectSubclassIsExt,
 };
@@ -102,6 +101,18 @@ impl Window {
         page.downcast::<WebView>().ok()
     }
 
+    fn toggle_dock(&self) {
+        let imp = self.imp();
+        let is_visible = imp.dock_revealer.reveals_child();
+
+        if !is_visible {
+            imp.dock_revealer.set_reveal_child(true);
+        } else {
+            imp.dock_revealer.set_reveal_child(false);
+            self.update_dock_info();
+        }
+    }
+
     fn toggle_command_palette(&self) {
         let imp = self.imp();
 
@@ -167,5 +178,61 @@ impl Window {
         let page_num = notebook.append_page(&webview, gtk4::Widget::NONE);
         notebook.set_current_page(Some(page_num));
         webview.grab_focus();
+
+        self.update_dock_info();
+
+        webview.connect_notify_local(
+            Some("title"),
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_webview, _| {
+                    window.update_dock_info();
+                }
+            ),
+        );
+
+        webview.connect_notify_local(
+            Some("uri"),
+            glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |_webview, _| {
+                    window.update_dock_info();
+                }
+            ),
+        );
+    }
+
+    fn update_dock_info(&self) {
+        let imp = self.imp();
+        let notebook = &imp.notebook;
+
+        imp.profile_label.set_label("default profile");
+
+        if let Some(current_page) = notebook.current_page() {
+            if let Some(page_widget) = notebook.nth_page(Some(current_page)) {
+                if let Ok(webview) = page_widget.downcast::<WebView>() {
+                    if let Some(uri) = webview.uri() {
+                        imp.uri_label.set_label(&uri);
+                    } else if let Some(title) = webview.title() {
+                        imp.uri_label.set_label(&title);
+                    } else {
+                        imp.uri_label.set_label("Loading...");
+                    }
+                }
+            } else {
+                imp.uri_label.set_label("No page.");
+            }
+        }
+
+        let n_tabs = notebook.n_pages();
+        let tab_text = if n_tabs == 1 {
+            "1 tab open".to_string()
+        } else {
+            format!("{} tabs open", n_tabs)
+        };
+
+        imp.tab_label.set_label(&tab_text);
     }
 }
