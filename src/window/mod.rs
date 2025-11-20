@@ -8,8 +8,9 @@ use glib::{
 use gtk4::{
     Application, CssProvider, EventControllerKey,
     gdk::{self, ModifierType},
-    gio, glib,
-    prelude::WidgetExt,
+    gio::{self, prelude::ApplicationExt as _},
+    glib,
+    prelude::{GtkWindowExt as _, WidgetExt},
 };
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
@@ -96,6 +97,12 @@ impl Window {
                         window.cycle_tab(false);
                         return glib::Propagation::Stop;
                     }
+
+                    if key == gdk::Key::W {
+                        window.close_current_tab();
+                        return glib::Propagation::Stop;
+                    }
+
                 }
 
                 glib::Propagation::Proceed
@@ -111,6 +118,26 @@ impl Window {
         let page = imp.notebook.nth_page(current_page)?;
 
         page.downcast::<WebView>().ok()
+    }
+
+    fn close_current_tab(&self) {
+        let imp = self.imp();
+        let notebook = &imp.notebook;
+
+        if let Some(current_page) = notebook.current_page() {
+            notebook.remove_page(Some(current_page));
+
+            let n_pages = notebook.n_pages();
+            if n_pages == 0 {
+                if let Some(app) = self.application() {
+                    app.quit()
+                } else {
+                    self.close();
+                }
+            }
+
+            return;
+        }
     }
 
     fn toggle_dock(&self) {
