@@ -72,6 +72,11 @@ impl Window {
                     }
                 }
 
+                if key == gdk::Key::D {
+                    window.toggle_dock();
+                    return glib::Propagation::Stop;
+                }
+
                 if modifier.contains(ModifierType::SHIFT_MASK) && key == gdk::Key::Return {
                     let mut rng = rand::thread_rng();
                     let idx = rng.gen_range(0..2);
@@ -136,6 +141,7 @@ impl Window {
                 }
             }
 
+            self.update_dock_info();
             return;
         }
     }
