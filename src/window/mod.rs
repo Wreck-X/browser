@@ -64,6 +64,30 @@ impl Window {
                                             None::<&gio::Cancellable>,
                                             |_| {},
                                         );
+                                    },
+                                    gdk::Key::j => {
+                                        webview.evaluate_javascript(
+                                            "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
+",
+                                            None,
+                                            None,
+                                            None::<&gio::Cancellable>,
+                                            |_| {},
+                                        );
+                                    },
+                                    gdk::Key::h => {
+                                       if webview.can_go_back() {
+                                           webview.go_back();
+                                       }
+
+                                       return glib::Propagation::Stop;
+                                    },
+                                    gdk::Key::l => {
+                                        if webview.can_go_forward() {
+                                            webview.go_forward();
+                                        }
+
+                                        return glib::Propagation::Stop;
                                     }
                                     _ => {}
                                 }
@@ -72,24 +96,26 @@ impl Window {
                     }
                 }
 
-                if key == gdk::Key::D {
-                    window.toggle_dock();
-                    return glib::Propagation::Stop;
-                }
+                if modifier.contains(ModifierType::SHIFT_MASK) {
+                    if key == gdk::Key::Return {
+                        let mut rng = rand::thread_rng();
+                        let idx = rng.gen_range(0..2);
+                        let arr = ["duckduckgo.com", "archlinux.org"];
+                        println!("{}", format!("{}", arr[idx]));
 
-                if modifier.contains(ModifierType::SHIFT_MASK) && key == gdk::Key::Return {
-                    let mut rng = rand::thread_rng();
-                    let idx = rng.gen_range(0..2);
-                    let arr = ["duckduckgo.com", "archlinux.org"];
-                    println!("{}", format!("{}", arr[idx]));
+                        window.new_tab(format!("https://{}", arr[idx]).as_str());
+                        return glib::Propagation::Stop;
+                    }
 
-                    window.new_tab(format!("https://{}", arr[idx]).as_str());
-                    return glib::Propagation::Stop;
-                }
+                    if key == gdk::Key::asciitilde {
+                        window.toggle_command_palette();
+                        return glib::Propagation::Stop;
+                    }
 
-                if modifier.contains(ModifierType::SHIFT_MASK) && key == gdk::Key::asciitilde {
-                    window.toggle_command_palette();
-                    return glib::Propagation::Stop;
+                    if key == gdk::Key::d {
+                        window.toggle_dock();
+                        return glib::Propagation::Stop;
+                    }
                 }
 
                 if modifier.contains(ModifierType::CONTROL_MASK) {
@@ -107,7 +133,6 @@ impl Window {
                         window.close_current_tab();
                         return glib::Propagation::Stop;
                     }
-
                 }
 
                 glib::Propagation::Proceed
