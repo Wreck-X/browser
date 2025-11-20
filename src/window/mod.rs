@@ -86,6 +86,18 @@ impl Window {
                     return glib::Propagation::Stop;
                 }
 
+                if modifier.contains(ModifierType::CONTROL_MASK) {
+                    if key == gdk::Key::J {
+                        window.cycle_tab(true);
+                        return glib::Propagation::Stop;
+                    }
+
+                    if key == gdk::Key::K {
+                        window.cycle_tab(false);
+                        return glib::Propagation::Stop;
+                    }
+                }
+
                 glib::Propagation::Proceed
             }
         ));
@@ -234,5 +246,27 @@ impl Window {
         };
 
         imp.tab_label.set_label(&tab_text);
+    }
+
+    fn cycle_tab(&self, forward: bool) {
+        let imp = self.imp();
+        let notebook = &imp.notebook;
+
+        if let Some(current_page) = notebook.current_page() {
+            let n_pages = notebook.n_pages() as isize;
+            if n_pages == 0 {
+                return;
+            }
+
+            let cur = current_page as isize;
+            let next = if forward {
+                (cur + 1).rem_euclid(n_pages)
+            } else {
+                (cur - 1).rem_euclid(n_pages)
+            };
+
+            notebook.set_current_page(Some(next as u32));
+            self.update_dock_info();
+        }
     }
 }
