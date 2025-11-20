@@ -1,7 +1,7 @@
 mod imp;
 
 use glib::{
-    Object,
+    GString, Object,
     object::{Cast, ObjectExt},
     subclass::types::ObjectSubclassIsExt,
 };
@@ -10,7 +10,7 @@ use gtk4::{
     gdk::{self, ModifierType},
     gio::{self, prelude::ApplicationExt as _},
     glib,
-    prelude::{GtkWindowExt as _, WidgetExt},
+    prelude::{EditableExt as _, GtkWindowExt as _, ListBoxRowExt as _, WidgetExt},
 };
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
@@ -112,7 +112,7 @@ impl Window {
                         return glib::Propagation::Stop;
                     }
 
-                    if key == gdk::Key::d {
+                    if key == gdk::Key::D {
                         window.toggle_dock();
                         return glib::Propagation::Stop;
                     }
@@ -140,6 +140,31 @@ impl Window {
         ));
 
         self.add_controller(key_controller);
+
+        let imp = self.imp();
+        imp.command_entry.connect_search_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |entry| {
+                let txt = entry.text().to_string();
+                window.populate_command_palette(&txt);
+            }
+        ));
+
+        imp.results_list.connect_row_activated(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |list, row| {
+                unsafe {
+                    if let Some(pi) = row.data::<i32>("page-index") {
+                        window.focus_tab_by_index(*pi.as_ptr());
+                        // hide palette after selection
+                        let imp = window.imp();
+                        imp.command_palette_container.set_visible(false);
+                    }
+                }
+            }
+        ));
     }
 
     fn current_webview(&self) -> Option<WebView> {
@@ -189,7 +214,10 @@ impl Window {
         if imp.command_palette_container.is_visible() {
             imp.command_palette_container.set_visible(false);
         } else {
+            self.populate_command_palette("");
             imp.command_palette_container.set_visible(true);
+            imp.command_entry.grab_focus();
+            imp.command_entry.select_region(0, -1);
         }
     }
 
@@ -326,5 +354,59 @@ impl Window {
             notebook.set_current_page(Some(next as u32));
             self.update_dock_info();
         }
+    }
+
+    fn populate_command_palette(&self, query: &str) {
+        let imp = self.imp();
+        let list = &imp.results_list;
+        let notebook = &imp.notebook;
+
+        while let Some(child) = list.first_child() {
+            list.remove(&child);
+        }
+
+        let q = query.to_lowercase();
+
+        let mut added = 0;
+        let n_pages = notebook.n_pages() as u32;
+
+        for page_index in 0..n_pages {
+            if added >= 5 {
+                break;
+            }
+
+            if let Some(page_widget) = notebook.nth_page(Some(page_index)) {
+                if let Ok(webview) = page_widget.downcast::<WebView>() {
+                    let title = webview
+                        .title()
+                        .or_else(|| webview.uri())
+                        .unwrap_or_else(|| GString::from_string_unchecked("untitled".to_string()));
+
+                    if q.is_empty() || title.to_lowercase().contains(&q) {
+                        let row = gtk4::ListBoxRow::new();
+                        let label = gtk4::Label::new(Some(&title));
+                        label.set_xalign(0.0);
+                        row.set_child(Some(&label));
+
+                        unsafe { row.set_data("page-index", page_index) };
+
+                        list.append(&row);
+                        added += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    fn focus_tab_by_index(&self, idx: i32) {
+        let imp = self.imp();
+        let notebook = &imp.notebook;
+
+        if idx < 0 || idx >= notebook.n_pages() as i32 {
+            return;
+        }
+
+        notebook.set_current_page(Some(idx as u32));
+        self.update_dock_info();
     }
 }
