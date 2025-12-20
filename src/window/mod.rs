@@ -47,94 +47,95 @@ impl Window {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_controller, key, _code, modifier| {
-                if modifier.is_empty() {
                     if let Some(webview) = window.current_webview() {
                         unsafe {
                             let editable: bool =
                                 unsafe { *webview.data::<bool>("is_editable").unwrap().as_ptr() };
 
                             if !editable {
-                                match key {
-                                    gdk::Key::k => {
-                                        webview.evaluate_javascript(
-                                            "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' });
-",
-                                            None,
-                                            None,
-                                            None::<&gio::Cancellable>,
-                                            |_| {},
-                                        );
-                                    },
-                                    gdk::Key::j => {
-                                        webview.evaluate_javascript(
-                                            "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
-",
-                                            None,
-                                            None,
-                                            None::<&gio::Cancellable>,
-                                            |_| {},
-                                        );
-                                    },
-                                    gdk::Key::h => {
+                                if modifier.is_empty() {
+                                    match key {
+                                        gdk::Key::k => {
+                                            webview.evaluate_javascript(
+                                                "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
+                                                ",
+                                                None,
+                                                None,
+                                                None::<&gio::Cancellable>,
+                                                |_| {},
+                                            );
+                                        },
+
+                                        gdk::Key::j => {
+                                            webview.evaluate_javascript(
+                                                "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' });
+                                                ",
+                                                None,
+                                                None,
+                                                None::<&gio::Cancellable>,
+                                                |_| {},
+                                            );
+                                        },
+
+                                        gdk::Key::x => {
+                                            window.close_current_tab();
+                                            return glib::Propagation::Stop;
+                                        }
+
+                                        _ => {}
+                                    }
+                                }
+
+                                if modifier.contains(ModifierType::SHIFT_MASK) {
+                                    if key == gdk::Key::H  {
                                        if webview.can_go_back() {
                                            webview.go_back();
                                        }
 
                                        return glib::Propagation::Stop;
-                                    },
-                                    gdk::Key::l => {
+                                    }
+
+                                    if key == gdk::Key::L {
                                         if webview.can_go_forward() {
                                             webview.go_forward();
                                         }
 
                                         return glib::Propagation::Stop;
                                     }
-                                    _ => {}
+
+                                    if key == gdk::Key::Return {
+                                        let mut rng = rand::thread_rng();
+                                        let idx = rng.gen_range(0..2);
+                                        let arr = ["duckduckgo.com", "archlinux.org"];
+                                        println!("{}", format!("{}", arr[idx]));
+
+                                        window.new_tab(format!("https://{}", arr[idx]).as_str());
+                                        return glib::Propagation::Stop;
+                                    }
+
+                                    if key == gdk::Key::asciitilde {
+                                        window.toggle_command_palette();
+                                        return glib::Propagation::Stop;
+                                    }
+
+                                    if key == gdk::Key::D {
+                                        window.toggle_dock();
+                                        return glib::Propagation::Stop;
+                                    }
+
+                                    if key == gdk::Key::J {
+                                        window.cycle_tab(true);
+                                        return glib::Propagation::Stop;
+                                    }
+
+                                    if key == gdk::Key::K {
+                                        window.cycle_tab(false);
+                                        return glib::Propagation::Stop;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-
-                if modifier.contains(ModifierType::SHIFT_MASK) {
-                    if key == gdk::Key::Return {
-                        let mut rng = rand::thread_rng();
-                        let idx = rng.gen_range(0..2);
-                        let arr = ["duckduckgo.com", "archlinux.org"];
-                        println!("{}", format!("{}", arr[idx]));
-
-                        window.new_tab(format!("https://{}", arr[idx]).as_str());
-                        return glib::Propagation::Stop;
-                    }
-
-                    if key == gdk::Key::asciitilde {
-                        window.toggle_command_palette();
-                        return glib::Propagation::Stop;
-                    }
-
-                    if key == gdk::Key::D {
-                        window.toggle_dock();
-                        return glib::Propagation::Stop;
-                    }
-                }
-
-                if modifier.contains(ModifierType::CONTROL_MASK) {
-                    if key == gdk::Key::J {
-                        window.cycle_tab(true);
-                        return glib::Propagation::Stop;
-                    }
-
-                    if key == gdk::Key::K {
-                        window.cycle_tab(false);
-                        return glib::Propagation::Stop;
-                    }
-
-                    if key == gdk::Key::W {
-                        window.close_current_tab();
-                        return glib::Propagation::Stop;
-                    }
-                }
-
                 glib::Propagation::Proceed
             }
         ));
