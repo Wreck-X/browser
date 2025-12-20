@@ -1,9 +1,10 @@
 .command-palette {
-    background: rgba(30, 30, 30, 0.98);
+    background: rgba(30, 80, 90, 0.98);
     border-radius: 12px;
     padding: 16px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
     border: 1px solid rgba(255, 255, 255, 0.1);
+    color: wheat;
 }
 
 .results-list {
