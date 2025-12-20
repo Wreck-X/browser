@@ -8,6 +8,7 @@
         <child>
             <object class="GtkOverlay" id="main_overlay">
 
+                <!-- 1. The Web Content -->
                 <child>
                     <object class="GtkNotebook" id="notebook">
                         <property name="show-tabs">false</property>
@@ -15,29 +16,35 @@
                     </object>
                 </child>
 
+                <!-- 2. Command Palette (Top Overlay) -->
                 <child type="overlay">
                     <object class="GtkBox" id="command_palette_container">
                         <property name="visible">false</property>
                         <property name="orientation">vertical</property>
                         <property name="halign">center</property>
                         <property name="valign">start</property>
-                        <property name="margin-top">100</property>
-                        <property name="width-request">700</property>
+                        <property name="width-request">600</property>
                         <property name="spacing">0</property>
 
+                        <!-- Add styling class -->
                         <style>
                             <class name="command-palette" />
                         </style>
 
+                        <!-- Search Input -->
                         <child>
                             <object class="GtkSearchEntry" id="command_entry">
                                 <property
                                     name="placeholder-text"
-                                >type</property>
+                                >Where to?</property>
                                 <property name="hexpand">true</property>
+                                <style>
+                                    <class name="search-entry" />
+                                </style>
                             </object>
                         </child>
 
+                        <!-- Results -->
                         <child>
                             <object
                                 class="GtkScrolledWindow"
@@ -50,6 +57,9 @@
                                     name="propagate-natural-height"
                                 >true</property>
                                 <property name="vexpand">true</property>
+                                <property
+                                    name="hscrollbar-policy"
+                                >never</property>
 
                                 <child>
                                     <object
@@ -59,9 +69,11 @@
                                         <property
                                             name="selection-mode"
                                         >single</property>
-
+                                        <property
+                                            name="activate-on-single-click"
+                                        >true</property>
                                         <style>
-                                            <class name="results_list" />
+                                            <class name="results-list" />
                                         </style>
                                     </object>
                                 </child>
@@ -70,104 +82,126 @@
                     </object>
                 </child>
 
+                <!-- 3. The Dock (Bottom Overlay) -->
                 <child type="overlay">
                     <object class="GtkRevealer" id="dock_revealer">
-                        <property name="transition-type">crossfade</property>
-                        <property name="transition-duration">200</property>
+                        <property name="transition-type">slide-up</property>
+                        <property name="transition-duration">250</property>
                         <property name="reveal-child">false</property>
-                        <property name="halign">fill</property>
+                        <property
+                            name="halign"
+                        >center</property> <!-- Center the dock itself -->
                         <property name="valign">end</property>
 
                         <child>
                             <object class="GtkBox">
-                                <property
-                                    name="orientation"
-                                >horiztonal</property>
-                                <property name="height-request">40</property>
+                                <property name="orientation">vertical</property>
+                                <!-- Container to add padding from bottom edge -->
                                 <style>
-                                    <class name="dock" />
+                                    <class name="dock-container" />
                                 </style>
 
                                 <child>
-                                    <object class="GtkBox" id="dock_left">
-                                        <property name="halign">start</property>
-                                        <property name="hexpand">true</property>
-                                        <property name="spacing">12</property>
+                                    <!-- Use CenterBox for perfect alignment -->
+                                    <object class="GtkCenterBox">
                                         <property
-                                            name="margin-start"
-                                        >20</property>
+                                            name="height-request"
+                                        >42</property>
                                         <style>
-                                            <class name="dock-section" />
+                                            <class name="dock" />
                                         </style>
 
-                                        <child>
-                                            <object
-                                                class="GtkLabel"
-                                                id="profile_label"
-                                            >
+                                        <!-- Left: Profile info -->
+                                        <child type="start">
+                                            <object class="GtkBox">
                                                 <property
-                                                    name="label"
-                                                >default</property>
-                                                <style>
-                                                    <class name="dock-text" />
-                                                </style>
+                                                    name="spacing"
+                                                >10</property>
+                                                <child>
+                                                    <object
+                                                        class="GtkLabel"
+                                                        id="profile_label"
+                                                    >
+                                                        <property
+                                                            name="label"
+                                                        >default</property>
+                                                        <style>
+                                                            <class
+                                                                name="dock-label"
+                                                            />
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property
+                                                            name="label"
+                                                        >|</property>
+                                                        <style>
+                                                            <class
+                                                                name="dock-separator"
+                                                            />
+                                                        </style>
+                                                    </object>
+                                                </child>
                                             </object>
                                         </child>
 
-                                    </object>
-                                </child>
-
-                                <child>
-                                    <object class="GtkBox" id="dock_center">
-                                        <property
-                                            name="halign"
-                                        >center</property>
-                                        <property name="spacing">12</property>
-                                        <style>
-                                            <class name="dock-section" />
-                                        </style>
-
-                                        <child>
+                                        <!-- Center: URI (The most important part) -->
+                                        <child type="center">
                                             <object
                                                 class="GtkLabel"
                                                 id="uri_label"
                                             >
                                                 <property
                                                     name="label"
-                                                >default</property>
+                                                >Loading...</property>
+                                                <property
+                                                    name="ellipsize"
+                                                >end</property>
+                                                <property
+                                                    name="max-width-chars"
+                                                >50</property>
                                                 <style>
-                                                    <class name="dock-text" />
+                                                    <class name="dock-label" />
+                                                    <class name="primary" />
                                                 </style>
                                             </object>
                                         </child>
 
-                                    </object>
-                                </child>
-
-                                <child>
-                                    <object class="GtkBox" id="dock_right">
-                                        <property name="halign">end</property>
-                                        <property name="spacing">12</property>
-                                        <property
-                                            name="margin-end"
-                                        >20</property>
-                                        <property name="hexpand">true</property>
-
-                                        <style>
-                                            <class name="dock-section" />
-                                        </style>
-
-                                        <child>
-                                            <object
-                                                class="GtkLabel"
-                                                id="tab_label"
-                                            >
+                                        <!-- Right: Tab Count -->
+                                        <child type="end">
+                                            <object class="GtkBox">
                                                 <property
-                                                    name="label"
-                                                >no page</property>
-                                                <style>
-                                                    <class name="dock-text" />
-                                                </style>
+                                                    name="halign"
+                                                >end</property>
+                                                <child>
+                                                    <object class="GtkLabel">
+                                                        <property
+                                                            name="label"
+                                                        >|</property>
+                                                        <style>
+                                                            <class
+                                                                name="dock-separator"
+                                                            />
+                                                        </style>
+                                                    </object>
+                                                </child>
+                                                <child>
+                                                    <object
+                                                        class="GtkLabel"
+                                                        id="tab_label"
+                                                    >
+                                                        <property
+                                                            name="label"
+                                                        >1 tab</property>
+                                                        <style>
+                                                            <class
+                                                                name="dock-label"
+                                                            />
+                                                        </style>
+                                                    </object>
+                                                </child>
                                             </object>
                                         </child>
 
@@ -177,6 +211,7 @@
                         </child>
                     </object>
                 </child>
+
             </object>
         </child>
     </template>

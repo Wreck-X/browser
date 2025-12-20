@@ -1,109 +1,103 @@
-.command-palette {
-    background: rgba(30, 80, 90, 0.98);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: wheat;
+/* Global Defaults */
+window {
+    background: #1e1e2e; /* Base dark color */
+    color: #cdd6f4;
 }
 
-.results-list {
+/* ===========================
+   Command Palette (Spotlight Style)
+   =========================== */
+
+.command-palette {
+    background: rgba(30, 30, 46, 0.95);
+    border: 1px solid rgba(186, 194, 222, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.2),
+        0 15px 40px rgba(0, 0, 0, 0.6);
+    margin-top: 120px; /* Position from top */
+}
+
+/* The Search Input */
+.search-entry {
     background: transparent;
     border: none;
+    box-shadow: none;
+    font-size: 20px;
+    color: #cdd6f4;
+    caret-color: #89b4fa;
+    margin-bottom: 12px;
+    padding: 0 8px;
+}
+
+/* Remove default GTK focus outline on entry */
+.search-entry:focus-within {
+    outline: none;
+    box-shadow: none;
+}
+
+.search-entry text {
+    background: transparent;
+}
+
+/* The Results List */
+.results-list {
+    background: transparent;
 }
 
 .results-list row {
+    padding: 10px 14px;
+    margin: 2px 0;
     border-radius: 8px;
-    padding: 12px 16px;
-    margin: 4px 0;
-    transition: all 200ms ease;
+    transition: background 150ms ease;
+    border-left: 0px solid transparent;
 }
 
+/* Hover State */
 .results-list row:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.05);
 }
 
+/* Selected/Active State - Vim style indicator */
 .results-list row:selected {
-    background: rgba(100, 150, 255, 0.4);
+    background: rgba(137, 180, 250, 0.15); /* Soft blue highlight */
+    color: #ffffff;
+    font-weight: 600;
 }
 
-.tab-title {
-    font-weight: bold;
-    font-size: 14px;
-}
+/* ===========================
+   The Dock (Floating Pill)
+   =========================== */
 
-.tab-url {
-    font-size: 12px;
-    opacity: 0.7;
-    margin-top: 4px;
-}
-
-.new-tab-indicator {
-    color: rgba(100, 200, 100, 1);
-    font-style: italic;
-}
-
-/* Command Palette */
-.cmd_plt {
-    background: rgba(30, 30, 30, 0.98);
-    border-radius: 12px;
-    padding: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.results_list {
+.dock-container {
+    /* Transparent container for the revealer */
     background: transparent;
-    border: none;
+    padding-bottom: 20px; /* Float off the bottom edge */
 }
 
-.results_list row {
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin: 4px 0;
-    transition: all 200ms ease;
-}
-
-.results_list row:hover {
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.results_list row:selected {
-    background: rgba(100, 150, 255, 0.4);
-}
-
-.tab-title {
-    font-weight: bold;
-    font-size: 14px;
-}
-
-.tab-url {
-    font-size: 12px;
-    opacity: 0.7;
-    margin-top: 4px;
-}
-
-.new-tab-indicator {
-    color: rgba(100, 200, 100, 1);
-    font-style: italic;
-}
-
-/* Dock */
 .dock {
-    background: rgba(20, 20, 20, 0.85);
-    backdrop-filter: blur(10px);
-    border-radius: 16px;
-    padding: 12px 24px;
-    box-shadow: 0 -5px 30px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(24, 24, 37, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 100px; /* Full pill shape */
+    padding: 8px 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    min-width: 400px;
 }
 
-.dock-icon {
-    font-size: 18px;
-}
-
-.dock-text {
+/* Typography in Dock */
+.dock-label {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
     font-size: 13px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.9);
+    color: #a6adc8;
+}
+
+.dock-label.primary {
+    color: #cdd6f4;
+    font-weight: bold;
+}
+
+.dock-separator {
+    color: #45475a;
+    margin: 0 8px;
 }
