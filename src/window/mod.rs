@@ -258,7 +258,22 @@ impl Window {
             document.addEventListener('focusout', updateEditState);
             document.addEventListener('selectionchange', updateEditState);
             updateEditState();
+
+            document.addEventListener("keydown", e => {
+                if (e.key === "Escape") {
+                    const el = document.activeElement;
+                    if (el && (el.tagName === "INPUT" ||
+                               el.tagName === "TEXTAREA" ||
+                               el.isContentEditable ||
+                               el.getAttribute('role') === 'textbox'
+                               )) {
+                        el.blur();
+                        e.preventDefault();
+                    }
+                }
+            });
         "#;
+
         let script = UserScript::new(
             js,
             webkit6::UserContentInjectedFrames::AllFrames,
