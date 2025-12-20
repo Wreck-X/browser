@@ -55,6 +55,16 @@ impl Window {
                             if !editable {
                                 if modifier.is_empty() {
                                     match key {
+                                        gdk::Key::f => {
+                                            webview.evaluate_javascript(
+                                                "window.__vimium_enter_hint_mode();",
+                                                None,
+                                                None,
+                                                None::<&gio::Cancellable>,
+                                                |_| {},
+                                            );
+                                        },
+
                                         gdk::Key::k => {
                                             webview.evaluate_javascript(
                                                 "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
@@ -273,6 +283,113 @@ impl Window {
                     }
                 }
             });
+
+            (function () {
+                if (window.__vimium_installed) return;
+                window.__vimium_installed = true;
+
+                const HINT_KEYS = "asdfghjklqwertyuiopzxcvbnm";
+                let active = false;
+                let targets = [];
+                let buffer = "";
+                let container = null;
+
+                function encode(n) {
+                    let s = "";
+                    const base = HINT_KEYS.length;
+                    do {
+                        s = HINT_KEYS[n % base] + s;
+                        n = Math.floor(n / base);
+                    } while (n > 0);
+                    return s;
+                }
+
+                function collectTargets() {
+                    const selectors = [
+                        "a[href]",
+                        "button",
+                        "input",
+                        "textarea",
+                        "select",
+                        "[role='button']",
+                        "[onclick]"
+                    ];
+
+                    return Array.from(document.querySelectorAll(selectors.join(",")))
+                        .filter(el => {
+                            const r = el.getBoundingClientRect();
+                            return r.width > 0 && r.height > 0;
+                        });
+                }
+
+                function showHints() {
+                    container = document.createElement("div");
+                    container.id = "__vimium_hints__";
+                    document.body.appendChild(container);
+
+                    targets.forEach((el, i) => {
+                        const r = el.getBoundingClientRect();
+                        const hint = document.createElement("span");
+
+                        hint.textContent = encode(i);
+                        hint.dataset.index = i;
+
+                        Object.assign(hint.style, {
+                            position: "absolute",
+                            left: `${r.left + window.scrollX}px`,
+                            top: `${r.top + window.scrollY}px`,
+                            background: "yellow",
+                            color: "black",
+                            font: "bold 12px monospace",
+                            padding: "1px 3px",
+                            zIndex: 2147483647
+                        });
+
+                        container.appendChild(hint);
+                    });
+                }
+
+                function exit() {
+                    active = false;
+                    buffer = "";
+                    document.removeEventListener("keydown", onKey, true);
+                    container?.remove();
+                    container = null;
+                }
+
+                function onKey(e) {
+                    if (e.key === "Escape") {
+                        exit();
+                        e.preventDefault();
+                        return;
+                    }
+
+                    if (!HINT_KEYS.includes(e.key)) return;
+
+                    buffer += e.key;
+
+                    const matches = Array.from(container.children)
+                        .filter(h => h.textContent.startsWith(buffer));
+
+                    if (matches.length === 1) {
+                        const idx = +matches[0].dataset.index;
+                        targets[idx].click();
+                        exit();
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                window.__vimium_enter_hint_mode = function () {
+                    if (active) return;
+                    active = true;
+                    buffer = "";
+                    targets = collectTargets();
+                    showHints();
+                    document.addEventListener("keydown", onKey, true);
+                };
+            })();
         "#;
 
         let script = UserScript::new(
