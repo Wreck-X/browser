@@ -47,6 +47,7 @@ impl ObjectImpl for Window {
 
         self.obj().load_css();
         self.obj().setup_shortcuts();
+        self.obj().setup_palette_controller();
         self.obj().new_tab("https://duckduckgo.com");
     }
 }

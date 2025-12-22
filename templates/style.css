@@ -43,6 +43,7 @@ window {
 
 /* The Results List */
 .results-list {
+    color: whitesmoke;
     background: transparent;
 }
 

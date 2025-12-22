@@ -10,7 +10,10 @@ use gtk4::{
     gdk::{self, ModifierType},
     gio::{self, prelude::ApplicationExt as _},
     glib,
-    prelude::{EditableExt as _, GtkWindowExt as _, ListBoxRowExt as _, WidgetExt},
+    prelude::{
+        BoxExt as _, EditableExt as _, EventControllerExt as _, GtkWindowExt as _,
+        ListBoxRowExt as _, WidgetExt as _,
+    },
 };
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
@@ -21,6 +24,17 @@ glib::wrapper! {
         @implements gio::ActionGroup, gio::ActionMap, gtk4::Accessible, gtk4::Buildable,
                     gtk4::ConstraintTarget, gtk4::Native, gtk4::Root, gtk4::ShortcutManager;
 }
+
+#[derive(Clone, Debug)]
+enum PaletteAction {
+    SwitchTab(u32),
+    OpenUrl(String),
+    Search(String),
+    Command(String), // Internal command (quit, reload, etc)
+}
+
+#[derive(Clone, Debug)]
+struct ActionWrapper(PaletteAction);
 
 impl Window {
     pub fn new(app: &Application) -> Self {
@@ -178,17 +192,237 @@ impl Window {
         imp.results_list.connect_row_activated(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |list, row| {
+            move |_list, row| {
                 unsafe {
-                    if let Some(pi) = row.data::<i32>("page-index") {
-                        window.focus_tab_by_index(*pi.as_ptr());
-                        // hide palette after selection
-                        let imp = window.imp();
-                        imp.command_palette_container.set_visible(false);
+                    if let Some(action_ptr) = row.data::<ActionWrapper>("action") {
+                        let action = (*action_ptr.as_ptr()).clone();
+                        window.execute_palette_action(action.0);
                     }
                 }
             }
         ));
+    }
+    fn execute_palette_action(&self, action: PaletteAction) {
+        let imp = self.imp();
+
+        // Hide palette first
+        imp.command_palette_container.set_visible(false);
+        imp.command_entry.set_text("");
+
+        match action {
+            PaletteAction::SwitchTab(idx) => self.focus_tab_by_index(idx as i32),
+            PaletteAction::OpenUrl(url) => self.new_tab(&url),
+            PaletteAction::Search(query) => {
+                let url = format!(
+                    "https://duckduckgo.com/?q={}",
+                    glib::Uri::escape_string(&query, None, true)
+                );
+                self.new_tab(&url);
+            }
+            PaletteAction::Command(cmd) => match cmd.as_str() {
+                "quit" | "q" => {
+                    if let Some(app) = self.application() {
+                        app.quit();
+                    } else {
+                        self.close();
+                    }
+                }
+                "reload" | "r" => {
+                    if let Some(webview) = self.current_webview() {
+                        webview.reload();
+                    }
+                }
+                "close" | "d" => self.close_current_tab(),
+                _ => println!("Unknown command: {}", cmd),
+            },
+        }
+    }
+
+    fn populate_command_palette(&self, query: &str) {
+        let imp = self.imp();
+        let list = &imp.results_list;
+
+        // clear list
+        while let Some(child) = list.first_child() {
+            list.remove(&child);
+        }
+
+        let q_clean = query.trim();
+
+        // 1. Check if it's a Command (:)
+        if q_clean.starts_with(":") {
+            let cmd = &q_clean[1..];
+            self.add_palette_row(
+                "Execute Command",
+                &format!("Run: {}", cmd),
+                PaletteAction::Command(cmd.to_string()),
+            );
+            return;
+        }
+
+        // 2. Check if it's a URL or Search
+        if !q_clean.is_empty() {
+            if self.is_likely_url(q_clean) {
+                let url = if q_clean.starts_with("http") {
+                    q_clean.to_string()
+                } else {
+                    format!("https://{}", q_clean)
+                };
+                self.add_palette_row("Go to URL", &url.clone(), PaletteAction::OpenUrl(url));
+            } else {
+                self.add_palette_row(
+                    "Search Web",
+                    &format!("DuckDuckGo: {}", q_clean),
+                    PaletteAction::Search(q_clean.to_string()),
+                );
+            }
+        }
+
+        // 3. List Open Tabs (filtered)
+        let notebook = &imp.notebook;
+        let n_pages = notebook.n_pages();
+
+        for i in 0..n_pages {
+            if let Some(page) = notebook.nth_page(Some(i)) {
+                if let Ok(webview) = page.downcast::<WebView>() {
+                    let title = webview
+                        .title()
+                        .map(|t| t.to_string())
+                        .unwrap_or("Untitled".into());
+                    let uri = webview.uri().map(|u| u.to_string()).unwrap_or("".into());
+
+                    // Simple fuzzy match
+                    if q_clean.is_empty()
+                        || title.to_lowercase().contains(&q_clean.to_lowercase())
+                        || uri.contains(q_clean)
+                    {
+                        self.add_palette_row(&title, &uri, PaletteAction::SwitchTab(i));
+                    }
+                }
+            }
+        }
+
+        if let Some(first_child) = list.first_child() {
+            if let Ok(row) = first_child.downcast::<gtk4::ListBoxRow>() {
+                list.select_row(Some(&row));
+            }
+        }
+    }
+
+    fn setup_palette_controller(&self) {
+        let imp = self.imp();
+        let entry = &imp.command_entry;
+
+        // 1. Handle Enter via the specific Signal (Robust)
+        entry.connect_activate(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| {
+                let imp = window.imp();
+                let list = &imp.results_list;
+
+                if let Some(row) = list.selected_row() {
+                    unsafe {
+                        if let Some(action_ptr) = row.data::<ActionWrapper>("action") {
+                            let action = (*action_ptr.as_ptr()).0.clone();
+                            window.execute_palette_action(action);
+                        }
+                    }
+                }
+            }
+        ));
+
+        // 2. Handle Up/Down/Esc via Key Controller
+        let controller = EventControllerKey::new();
+        // IMPORTANT: Capture ensures we see the key before the text box moves the cursor
+        controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
+
+        controller.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_controller, key, _code, _modifier| {
+                let imp = window.imp();
+                let list = &imp.results_list;
+
+                match key {
+                    gdk::Key::Down | gdk::Key::n
+                        if _modifier.contains(ModifierType::CONTROL_MASK)
+                            || key == gdk::Key::Down =>
+                    {
+                        if let Some(row) = list.selected_row() {
+                            let idx = row.index();
+                            if let Some(next_row) = list.row_at_index(idx + 1) {
+                                list.select_row(Some(&next_row));
+                            }
+                        } else if let Some(row) = list.row_at_index(0) {
+                            list.select_row(Some(&row));
+                        }
+                        return glib::Propagation::Stop;
+                    }
+
+                    gdk::Key::Up | gdk::Key::p
+                        if _modifier.contains(ModifierType::CONTROL_MASK)
+                            || key == gdk::Key::Up =>
+                    {
+                        if let Some(row) = list.selected_row() {
+                            let idx = row.index();
+                            if idx > 0 {
+                                if let Some(prev_row) = list.row_at_index(idx - 1) {
+                                    list.select_row(Some(&prev_row));
+                                }
+                            }
+                        }
+                        return glib::Propagation::Stop;
+                    }
+
+                    gdk::Key::Escape => {
+                        window.toggle_command_palette();
+                        return glib::Propagation::Stop;
+                    }
+
+                    // For Enter, we return Proceed so the widget fires 'activate' handled above
+                    _ => glib::Propagation::Proceed,
+                }
+            }
+        ));
+
+        entry.add_controller(controller);
+    }
+
+    fn add_palette_row(&self, title: &str, subtitle: &str, action: PaletteAction) {
+        let imp = self.imp();
+        let row = gtk4::ListBoxRow::new();
+        let box_container = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+        box_container.set_margin_start(10);
+        box_container.set_margin_end(10);
+        box_container.set_margin_top(5);
+        box_container.set_margin_bottom(5);
+
+        let title_lbl = gtk4::Label::new(Some(title));
+        title_lbl.set_xalign(0.0);
+        title_lbl.add_css_class("palette-title"); // Style this in CSS
+
+        let sub_lbl = gtk4::Label::new(Some(subtitle));
+        sub_lbl.set_xalign(0.0);
+        sub_lbl.add_css_class("palette-subtitle"); // Style this (smaller, gray)
+
+        box_container.append(&title_lbl);
+        box_container.append(&sub_lbl);
+        row.set_child(Some(&box_container));
+
+        // Store the action safely
+        unsafe {
+            row.set_data("action", ActionWrapper(action));
+        }
+
+        imp.results_list.append(&row);
+    }
+
+    fn is_likely_url(&self, query: &str) -> bool {
+        // Rudimentary heuristic
+        query.contains('.') && !query.contains(' ') && !query.starts_with('?')
     }
 
     fn current_webview(&self) -> Option<WebView> {
@@ -499,48 +733,6 @@ impl Window {
 
             notebook.set_current_page(Some(next as u32));
             self.update_dock_info();
-        }
-    }
-
-    fn populate_command_palette(&self, query: &str) {
-        let imp = self.imp();
-        let list = &imp.results_list;
-        let notebook = &imp.notebook;
-
-        while let Some(child) = list.first_child() {
-            list.remove(&child);
-        }
-
-        let q = query.to_lowercase();
-
-        let mut added = 0;
-        let n_pages = notebook.n_pages() as u32;
-
-        for page_index in 0..n_pages {
-            if added >= 5 {
-                break;
-            }
-
-            if let Some(page_widget) = notebook.nth_page(Some(page_index)) {
-                if let Ok(webview) = page_widget.downcast::<WebView>() {
-                    let title = webview
-                        .title()
-                        .or_else(|| webview.uri())
-                        .unwrap_or_else(|| GString::from_string_unchecked("untitled".to_string()));
-
-                    if q.is_empty() || title.to_lowercase().contains(&q) {
-                        let row = gtk4::ListBoxRow::new();
-                        let label = gtk4::Label::new(Some(&title));
-                        label.set_xalign(0.0);
-                        row.set_child(Some(&label));
-
-                        unsafe { row.set_data("page-index", page_index) };
-
-                        list.append(&row);
-                        added += 1;
-                    }
-                }
-            }
         }
     }
 
