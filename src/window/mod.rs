@@ -96,6 +96,10 @@ impl Window {
                                             );
                                         },
 
+                                        gdk::Key::r => {
+                                            webview.reload();
+                                            return glib::Propagation::Stop;
+                                        }
                                         gdk::Key::x => {
                                             window.close_current_tab();
                                             return glib::Propagation::Stop;
