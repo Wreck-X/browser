@@ -47,6 +47,15 @@ impl Window {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_controller, key, _code, modifier| {
+                let imp = window.imp();
+                if imp.command_palette_container.is_visible() {
+                    if key == gdk::Key::Escape {
+                        window.toggle_command_palette();
+                        return glib::Propagation::Stop;
+                    }
+                    return glib::Propagation::Proceed;
+                }
+
                     if let Some(webview) = window.current_webview() {
                         unsafe {
                             let editable: bool =
