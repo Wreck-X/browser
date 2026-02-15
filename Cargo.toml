@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-glib = "0.21.4"
-gtk4 = { version = "0.10.1", features = ["v4_20"] }
+glib = "0.20"
+gtk4 = { version = "0.9", features = ["v4_14"] }
 rand = "0.9.2"
-webkit6 = "0.5.0"
+webkit6 = "0.4"  # Changed to 0.4 which is compatible with gtk4 0.9
 
 [build-dependencies]
-glib-build-tools = "0.21.0"
+glib-build-tools = "0.20"

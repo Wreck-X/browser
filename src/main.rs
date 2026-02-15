@@ -1,4 +1,5 @@
 mod window;
+mod shortcuts;
 
 use gtk4::Application;
 use gtk4::gio;
