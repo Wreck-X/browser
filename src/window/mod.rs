@@ -1,5 +1,6 @@
 mod imp;
 
+
 use glib::{
     GString, Object,
     object::{Cast, ObjectExt},
@@ -17,6 +18,7 @@ use gtk4::{
 };
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
+use crate::shortcuts;
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -26,7 +28,7 @@ glib::wrapper! {
 }
 
 #[derive(Clone, Debug)]
-enum PaletteAction {
+pub enum PaletteAction {
     SwitchTab(u32),
     OpenUrl(String),
     Search(String),
@@ -34,7 +36,7 @@ enum PaletteAction {
 }
 
 #[derive(Clone, Debug)]
-struct ActionWrapper(PaletteAction);
+pub struct ActionWrapper(pub(crate) PaletteAction);
 
 impl Window {
     pub fn new(app: &Application) -> Self {
@@ -53,132 +55,7 @@ impl Window {
     }
 
     fn setup_shortcuts(&self) {
-        let key_controller = EventControllerKey::new();
-
-        key_controller.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_controller, key, _code, modifier| {
-                let imp = window.imp();
-                if imp.command_palette_container.is_visible() {
-                    if key == gdk::Key::Escape {
-                        window.toggle_command_palette();
-                        return glib::Propagation::Stop;
-                    }
-                    return glib::Propagation::Proceed;
-                }
-
-                    if let Some(webview) = window.current_webview() {
-                        unsafe {
-                            let editable: bool =
-                                unsafe { *webview.data::<bool>("is_editable").unwrap().as_ptr() };
-
-                            if !editable {
-                                if modifier.is_empty() {
-                                    match key {
-                                        gdk::Key::f => {
-                                            webview.evaluate_javascript(
-                                                "window.__vimium_enter_hint_mode();",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::k => {
-                                            webview.evaluate_javascript(
-                                                "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
-                                                ",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::j => {
-                                            webview.evaluate_javascript(
-                                                "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' });
-                                                ",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::r => {
-                                            webview.reload();
-                                            return glib::Propagation::Stop;
-                                        }
-                                        gdk::Key::x => {
-                                            window.close_current_tab();
-                                            return glib::Propagation::Stop;
-                                        }
-
-                                        _ => {}
-                                    }
-                                }
-
-                                if modifier.contains(ModifierType::SHIFT_MASK) {
-                                    if key == gdk::Key::H  {
-                                       if webview.can_go_back() {
-                                           webview.go_back();
-                                       }
-
-                                       return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::L {
-                                        if webview.can_go_forward() {
-                                            webview.go_forward();
-                                        }
-
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::Return {
-                                        let mut rng = rand::thread_rng();
-                                        let idx = rng.gen_range(0..2);
-                                        let arr = ["duckduckgo.com", "archlinux.org"];
-                                        println!("{}", format!("{}", arr[idx]));
-
-                                        window.new_tab(format!("https://{}", arr[idx]).as_str());
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::asciitilde {
-                                        window.toggle_command_palette();
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::D {
-                                        window.toggle_dock();
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::J {
-                                        window.cycle_tab(true);
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::K {
-                                        window.cycle_tab(false);
-                                        return glib::Propagation::Stop;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                glib::Propagation::Proceed
-            }
-        ));
-
-        self.add_controller(key_controller);
-
+        shortcuts::setup_shortcuts(self);
         let imp = self.imp();
         imp.command_entry.connect_search_changed(glib::clone!(
             #[weak(rename_to = window)]
@@ -202,7 +79,8 @@ impl Window {
             }
         ));
     }
-    fn execute_palette_action(&self, action: PaletteAction) {
+
+    pub fn execute_palette_action(&self, action: PaletteAction) {
         let imp = self.imp();
 
         // Hide palette first
@@ -309,88 +187,6 @@ impl Window {
         }
     }
 
-    fn setup_palette_controller(&self) {
-        let imp = self.imp();
-        let entry = &imp.command_entry;
-
-        // 1. Handle Enter via the specific Signal (Robust)
-        entry.connect_activate(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_| {
-                let imp = window.imp();
-                let list = &imp.results_list;
-
-                if let Some(row) = list.selected_row() {
-                    unsafe {
-                        if let Some(action_ptr) = row.data::<ActionWrapper>("action") {
-                            let action = (*action_ptr.as_ptr()).0.clone();
-                            window.execute_palette_action(action);
-                        }
-                    }
-                }
-            }
-        ));
-
-        // 2. Handle Up/Down/Esc via Key Controller
-        let controller = EventControllerKey::new();
-        // IMPORTANT: Capture ensures we see the key before the text box moves the cursor
-        controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
-
-        controller.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_controller, key, _code, _modifier| {
-                let imp = window.imp();
-                let list = &imp.results_list;
-
-                match key {
-                    gdk::Key::Down | gdk::Key::n
-                        if _modifier.contains(ModifierType::CONTROL_MASK)
-                            || key == gdk::Key::Down =>
-                    {
-                        if let Some(row) = list.selected_row() {
-                            let idx = row.index();
-                            if let Some(next_row) = list.row_at_index(idx + 1) {
-                                list.select_row(Some(&next_row));
-                            }
-                        } else if let Some(row) = list.row_at_index(0) {
-                            list.select_row(Some(&row));
-                        }
-                        return glib::Propagation::Stop;
-                    }
-
-                    gdk::Key::Up | gdk::Key::p
-                        if _modifier.contains(ModifierType::CONTROL_MASK)
-                            || key == gdk::Key::Up =>
-                    {
-                        if let Some(row) = list.selected_row() {
-                            let idx = row.index();
-                            if idx > 0 {
-                                if let Some(prev_row) = list.row_at_index(idx - 1) {
-                                    list.select_row(Some(&prev_row));
-                                }
-                            }
-                        }
-                        return glib::Propagation::Stop;
-                    }
-
-                    gdk::Key::Escape => {
-                        window.toggle_command_palette();
-                        return glib::Propagation::Stop;
-                    }
-
-                    // For Enter, we return Proceed so the widget fires 'activate' handled above
-                    _ => glib::Propagation::Proceed,
-                }
-            }
-        ));
-
-        entry.add_controller(controller);
-    }
-
     fn add_palette_row(&self, title: &str, subtitle: &str, action: PaletteAction) {
         let imp = self.imp();
         let row = gtk4::ListBoxRow::new();
@@ -425,7 +221,7 @@ impl Window {
         query.contains('.') && !query.contains(' ') && !query.starts_with('?')
     }
 
-    fn current_webview(&self) -> Option<WebView> {
+    pub fn current_webview(&self) -> Option<WebView> {
         let imp = self.imp();
         let current_page = imp.notebook.current_page();
         let page = imp.notebook.nth_page(current_page)?;
@@ -433,7 +229,7 @@ impl Window {
         page.downcast::<WebView>().ok()
     }
 
-    fn close_current_tab(&self) {
+    pub fn close_current_tab(&self) {
         let imp = self.imp();
         let notebook = &imp.notebook;
 
@@ -454,7 +250,7 @@ impl Window {
         }
     }
 
-    fn toggle_dock(&self) {
+    pub fn toggle_dock(&self) {
         let imp = self.imp();
         let is_visible = imp.dock_revealer.reveals_child();
 
@@ -466,7 +262,7 @@ impl Window {
         }
     }
 
-    fn toggle_command_palette(&self) {
+    pub fn toggle_command_palette(&self) {
         let imp = self.imp();
 
         if imp.command_palette_container.is_visible() {
@@ -479,7 +275,7 @@ impl Window {
         }
     }
 
-    fn new_tab(&self, uri: &str) {
+    pub fn new_tab(&self, uri: &str) {
         let imp = self.imp();
         let notebook = &imp.notebook;
         let ucm = UserContentManager::new();
@@ -714,7 +510,7 @@ impl Window {
         imp.tab_label.set_label(&tab_text);
     }
 
-    fn cycle_tab(&self, forward: bool) {
+    pub fn cycle_tab(&self, forward: bool) {
         let imp = self.imp();
         let notebook = &imp.notebook;
 
