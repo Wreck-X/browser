@@ -24,90 +24,92 @@ pub fn setup(window: &Window) {
             }
             
             if let Some(webview) = win.current_webview() {
-                unsafe {
-                    let editable: bool = unsafe {
-                        *webview.data::<bool>("is_editable").unwrap().as_ptr()
-                    };
-                    
-                    if !editable {
-                        if modifier.is_empty() {
-                            match key {
-                                gdk::Key::f => {
-                                    webview.evaluate_javascript(
-                                        "window.__vimium_enter_hint_mode();",
-                                        None,
-                                        None,
-                                        None::<&gio::Cancellable>,
-                                        |_| {},
-                                    );
-                                },
-                                gdk::Key::k => {
-                                    webview.evaluate_javascript(
-                                        "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' }); ",
-                                        None,
-                                        None,
-                                        None::<&gio::Cancellable>,
-                                        |_| {},
-                                    );
-                                },
-                                gdk::Key::j => {
-                                    webview.evaluate_javascript(
-                                        "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' }); ",
-                                        None,
-                                        None,
-                                        None::<&gio::Cancellable>,
-                                        |_| {},
-                                    );
-                                },
-                                gdk::Key::r => {
-                                    webview.reload();
-                                    return glib::Propagation::Stop;
-                                }
-                                gdk::Key::x => {
-                                    win.close_current_tab();
-                                    return glib::Propagation::Stop;
-                                }
-                                _ => {}
+                let editable: bool = unsafe {
+                    *webview.data::<bool>("is_editable").unwrap().as_ptr()
+                };
+                
+                if !editable {
+                    if modifier.is_empty() {
+                        match key {
+                            gdk::Key::f => {
+                                webview.evaluate_javascript(
+                                    "window.__vimium_enter_hint_mode();",
+                                    None,
+                                    None,
+                                    None::<&gio::Cancellable>,
+                                    |_| {},
+                                );
+                            },
+                            gdk::Key::k => {
+                                webview.evaluate_javascript(
+                                    "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' }); ",
+                                    None,
+                                    None,
+                                    None::<&gio::Cancellable>,
+                                    |_| {},
+                                );
+                            },
+                            gdk::Key::j => {
+                                webview.evaluate_javascript(
+                                    "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' }); ",
+                                    None,
+                                    None,
+                                    None::<&gio::Cancellable>,
+                                    |_| {},
+                                );
+                            },
+                            gdk::Key::r => {
+                                webview.reload();
+                                return glib::Propagation::Stop;
                             }
+                            gdk::Key::x => {
+                                win.close_current_tab();
+                                return glib::Propagation::Stop;
+                            }
+                            _ => {}
                         }
-                        
-                        if modifier.contains(ModifierType::SHIFT_MASK) {
-                            if key == gdk::Key::H {
-                                if webview.can_go_back() {
-                                    webview.go_back();
-                                }
-                                return glib::Propagation::Stop;
+                    }
+                    
+                    if modifier.contains(ModifierType::SHIFT_MASK) {
+                        if key == gdk::Key::H {
+                            if webview.can_go_back() {
+                                webview.go_back();
                             }
-                            if key == gdk::Key::L {
-                                if webview.can_go_forward() {
-                                    webview.go_forward();
-                                }
-                                return glib::Propagation::Stop;
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::L {
+                            if webview.can_go_forward() {
+                                webview.go_forward();
                             }
-                            if key == gdk::Key::Return {
-                                let mut rng = rand::thread_rng();
-                                let idx = rng.gen_range(0..2);
-                                let arr = ["duckduckgo.com", "archlinux.org"];
-                                println!("{}", format!("{}", arr[idx]));
-                                win.new_tab(format!("https://{}", arr[idx]).as_str());
-                                return glib::Propagation::Stop;
-                            }
-                            if key == gdk::Key::asciitilde {
-                                win.toggle_command_palette();
-                                return glib::Propagation::Stop;
-                            }
-                            if key == gdk::Key::D {
-                                win.toggle_dock();
-                                return glib::Propagation::Stop;
-                            }
-                            if key == gdk::Key::J {
-                                win.cycle_tab(true);
-                                return glib::Propagation::Stop;
-                            }
-                            if key == gdk::Key::K {
-                                win.cycle_tab(false);
-                                return glib::Propagation::Stop;
-                            }
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::Return {
+                            let mut rng = rand::thread_rng();
+                            let idx = rng.gen_range(0..2);
+                            let arr = ["duckduckgo.com", "archlinux.org"];
+                            println!("{}", format!("{}", arr[idx]));
+                            win.new_tab(format!("https://{}", arr[idx]).as_str());
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::asciitilde {
+                            win.toggle_command_palette();
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::D {
+                            win.toggle_dock();
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::J {
+                            win.cycle_tab(true);
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::K {
+                            win.cycle_tab(false);
+                            return glib::Propagation::Stop;
+                        }
+                        if key == gdk::Key::N {  
+                            win.show_notification("Test Notification", "This is a test!");  
+                            return glib::Propagation::Stop;  
                         }
                     }
                 }

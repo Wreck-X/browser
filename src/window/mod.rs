@@ -19,6 +19,7 @@ use gtk4::{
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
 use crate::shortcuts;
+use notify_rust::Notification;
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -52,6 +53,14 @@ impl Window {
             &provider,
             gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION,
         );
+    }
+
+    pub fn show_notification(&self, title: &str, body: &str) {
+        Notification::new()
+            .summary(title)
+            .body(body)
+            .show()
+            .unwrap();
     }
 
     fn setup_shortcuts(&self) {
