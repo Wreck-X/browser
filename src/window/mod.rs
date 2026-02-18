@@ -1,5 +1,6 @@
 mod imp;
 
+
 use glib::{
     GString, Object,
     object::{Cast, ObjectExt},
@@ -15,8 +16,12 @@ use gtk4::{
         ListBoxRowExt as _, WidgetExt as _,
     },
 };
+use std::fs;
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
+use crate::shortcuts;
+use notify_rust::Notification;
+use std::time::{Duration, Instant};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -26,7 +31,7 @@ glib::wrapper! {
 }
 
 #[derive(Clone, Debug)]
-enum PaletteAction {
+pub enum PaletteAction {
     SwitchTab(u32),
     OpenUrl(String),
     Search(String),
@@ -34,9 +39,82 @@ enum PaletteAction {
 }
 
 #[derive(Clone, Debug)]
-struct ActionWrapper(PaletteAction);
+pub struct ActionWrapper(pub(crate) PaletteAction);
 
 impl Window {
+
+    fn get_memory_usage(&self) -> Option<u64> {  
+        let status = fs::read_to_string(format!("/proc/{}/status", std::process::id())).ok()?;  
+        for line in status.lines() {  
+            if line.starts_with("VmRSS:") {  
+                let parts: Vec<&str> = line.split_whitespace().collect();  
+                if parts.len() >= 2 {  
+                    return parts[1].parse::<u64>().ok().map(|kb| kb * 1024); // Convert to bytes  
+                }  
+            }  
+        }  
+        None  
+    }  
+  
+    fn track_memory_usage(&self, webview: &WebView) {  
+        let initial_memory = self.get_memory_usage();  
+        unsafe { webview.set_data("initial_memory", initial_memory) };  
+  
+    webview.connect_load_changed(glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_webview, event| {
+            if let webkit6::LoadEvent::Finished = event {
+                if let Some(current_memory) = window.get_memory_usage() {
+                    unsafe {
+                        if let Some(initial_ptr) = _webview.data::<u64>("initial_memory") {
+                            let initial = initial_ptr.as_ref();
+                            let delta = current_memory.saturating_sub(*initial);
+                            println!("Memory: {} bytes (+{} delta)", current_memory, delta);
+                        }
+                    }
+                }
+            }
+        }
+    ));
+    }  
+
+
+    fn get_cpu_usage(&self) -> Option<Duration> {  
+        let usage = fs::read_to_string(format!("/proc/{}/stat", std::process::id())).ok()?;  
+        let parts: Vec<&str> = usage.split_whitespace().collect();  
+        if parts.len() >= 17 {  
+            let utime: u64 = parts[13].parse().ok()?;  
+            let stime: u64 = parts[14].parse().ok()?;  
+            let total_ticks = utime + stime;  
+            // Convert to nanoseconds (assuming 100Hz tick rate)  
+            Some(Duration::from_nanos(total_ticks * 10_000_000))  
+        } else {  
+            None  
+        }  
+    }  
+  
+    fn track_cpu_usage(&self, webview: &WebView) {  
+        let start_cpu = self.get_cpu_usage();  
+        let start_time = Instant::now();  
+          
+        webview.connect_load_changed(glib::clone!(  
+            #[weak(rename_to = window)]  
+            self,  
+            move |_webview, event| {  
+                if let webkit6::LoadEvent::Finished = event {  
+                    if let Some(end_cpu) = window.get_cpu_usage() {  
+                        if let Some(start_cpu) = start_cpu {  
+                            let elapsed = start_time.elapsed();  
+                            let cpu_time = end_cpu.saturating_sub(start_cpu);  
+                            let cpu_percent = (cpu_time.as_secs_f64() / elapsed.as_secs_f64()) * 100.0;  
+                            println!("CPU Usage: {:.1}% over {:?}", cpu_percent, elapsed);  
+                        }  
+                    }  
+                }  
+            }  
+        ));  
+    }  
     pub fn new(app: &Application) -> Self {
         Object::builder().property("application", app).build()
     }
@@ -52,133 +130,16 @@ impl Window {
         );
     }
 
+    pub fn show_notification(&self, title: &str, body: &str) {
+        Notification::new()
+            .summary(title)
+            .body(body)
+            .show()
+            .unwrap();
+    }
+
     fn setup_shortcuts(&self) {
-        let key_controller = EventControllerKey::new();
-
-        key_controller.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_controller, key, _code, modifier| {
-                let imp = window.imp();
-                if imp.command_palette_container.is_visible() {
-                    if key == gdk::Key::Escape {
-                        window.toggle_command_palette();
-                        return glib::Propagation::Stop;
-                    }
-                    return glib::Propagation::Proceed;
-                }
-
-                    if let Some(webview) = window.current_webview() {
-                        unsafe {
-                            let editable: bool =
-                                unsafe { *webview.data::<bool>("is_editable").unwrap().as_ptr() };
-
-                            if !editable {
-                                if modifier.is_empty() {
-                                    match key {
-                                        gdk::Key::f => {
-                                            webview.evaluate_javascript(
-                                                "window.__vimium_enter_hint_mode();",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::k => {
-                                            webview.evaluate_javascript(
-                                                "document.scrollingElement.scrollBy({ top: -50, behavior: 'smooth' });
-                                                ",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::j => {
-                                            webview.evaluate_javascript(
-                                                "document.scrollingElement.scrollBy({ top: 50, behavior: 'smooth' });
-                                                ",
-                                                None,
-                                                None,
-                                                None::<&gio::Cancellable>,
-                                                |_| {},
-                                            );
-                                        },
-
-                                        gdk::Key::r => {
-                                            webview.reload();
-                                            return glib::Propagation::Stop;
-                                        }
-                                        gdk::Key::x => {
-                                            window.close_current_tab();
-                                            return glib::Propagation::Stop;
-                                        }
-
-                                        _ => {}
-                                    }
-                                }
-
-                                if modifier.contains(ModifierType::SHIFT_MASK) {
-                                    if key == gdk::Key::H  {
-                                       if webview.can_go_back() {
-                                           webview.go_back();
-                                       }
-
-                                       return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::L {
-                                        if webview.can_go_forward() {
-                                            webview.go_forward();
-                                        }
-
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::Return {
-                                        let mut rng = rand::thread_rng();
-                                        let idx = rng.gen_range(0..2);
-                                        let arr = ["duckduckgo.com", "archlinux.org"];
-                                        println!("{}", format!("{}", arr[idx]));
-
-                                        window.new_tab(format!("https://{}", arr[idx]).as_str());
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::asciitilde {
-                                        window.toggle_command_palette();
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::D {
-                                        window.toggle_dock();
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::J {
-                                        window.cycle_tab(true);
-                                        return glib::Propagation::Stop;
-                                    }
-
-                                    if key == gdk::Key::K {
-                                        window.cycle_tab(false);
-                                        return glib::Propagation::Stop;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                glib::Propagation::Proceed
-            }
-        ));
-
-        self.add_controller(key_controller);
-
+        shortcuts::setup_shortcuts(self);
         let imp = self.imp();
         imp.command_entry.connect_search_changed(glib::clone!(
             #[weak(rename_to = window)]
@@ -202,7 +163,8 @@ impl Window {
             }
         ));
     }
-    fn execute_palette_action(&self, action: PaletteAction) {
+
+    pub fn execute_palette_action(&self, action: PaletteAction) {
         let imp = self.imp();
 
         // Hide palette first
@@ -309,88 +271,6 @@ impl Window {
         }
     }
 
-    fn setup_palette_controller(&self) {
-        let imp = self.imp();
-        let entry = &imp.command_entry;
-
-        // 1. Handle Enter via the specific Signal (Robust)
-        entry.connect_activate(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_| {
-                let imp = window.imp();
-                let list = &imp.results_list;
-
-                if let Some(row) = list.selected_row() {
-                    unsafe {
-                        if let Some(action_ptr) = row.data::<ActionWrapper>("action") {
-                            let action = (*action_ptr.as_ptr()).0.clone();
-                            window.execute_palette_action(action);
-                        }
-                    }
-                }
-            }
-        ));
-
-        // 2. Handle Up/Down/Esc via Key Controller
-        let controller = EventControllerKey::new();
-        // IMPORTANT: Capture ensures we see the key before the text box moves the cursor
-        controller.set_propagation_phase(gtk4::PropagationPhase::Capture);
-
-        controller.connect_key_pressed(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            #[upgrade_or]
-            glib::Propagation::Proceed,
-            move |_controller, key, _code, _modifier| {
-                let imp = window.imp();
-                let list = &imp.results_list;
-
-                match key {
-                    gdk::Key::Down | gdk::Key::n
-                        if _modifier.contains(ModifierType::CONTROL_MASK)
-                            || key == gdk::Key::Down =>
-                    {
-                        if let Some(row) = list.selected_row() {
-                            let idx = row.index();
-                            if let Some(next_row) = list.row_at_index(idx + 1) {
-                                list.select_row(Some(&next_row));
-                            }
-                        } else if let Some(row) = list.row_at_index(0) {
-                            list.select_row(Some(&row));
-                        }
-                        return glib::Propagation::Stop;
-                    }
-
-                    gdk::Key::Up | gdk::Key::p
-                        if _modifier.contains(ModifierType::CONTROL_MASK)
-                            || key == gdk::Key::Up =>
-                    {
-                        if let Some(row) = list.selected_row() {
-                            let idx = row.index();
-                            if idx > 0 {
-                                if let Some(prev_row) = list.row_at_index(idx - 1) {
-                                    list.select_row(Some(&prev_row));
-                                }
-                            }
-                        }
-                        return glib::Propagation::Stop;
-                    }
-
-                    gdk::Key::Escape => {
-                        window.toggle_command_palette();
-                        return glib::Propagation::Stop;
-                    }
-
-                    // For Enter, we return Proceed so the widget fires 'activate' handled above
-                    _ => glib::Propagation::Proceed,
-                }
-            }
-        ));
-
-        entry.add_controller(controller);
-    }
-
     fn add_palette_row(&self, title: &str, subtitle: &str, action: PaletteAction) {
         let imp = self.imp();
         let row = gtk4::ListBoxRow::new();
@@ -425,7 +305,7 @@ impl Window {
         query.contains('.') && !query.contains(' ') && !query.starts_with('?')
     }
 
-    fn current_webview(&self) -> Option<WebView> {
+    pub fn current_webview(&self) -> Option<WebView> {
         let imp = self.imp();
         let current_page = imp.notebook.current_page();
         let page = imp.notebook.nth_page(current_page)?;
@@ -433,7 +313,7 @@ impl Window {
         page.downcast::<WebView>().ok()
     }
 
-    fn close_current_tab(&self) {
+    pub fn close_current_tab(&self) {
         let imp = self.imp();
         let notebook = &imp.notebook;
 
@@ -454,7 +334,7 @@ impl Window {
         }
     }
 
-    fn toggle_dock(&self) {
+    pub fn toggle_dock(&self) {
         let imp = self.imp();
         let is_visible = imp.dock_revealer.reveals_child();
 
@@ -466,7 +346,7 @@ impl Window {
         }
     }
 
-    fn toggle_command_palette(&self) {
+    pub fn toggle_command_palette(&self) {
         let imp = self.imp();
 
         if imp.command_palette_container.is_visible() {
@@ -479,14 +359,16 @@ impl Window {
         }
     }
 
-    fn new_tab(&self, uri: &str) {
+    pub fn new_tab(&self, uri: &str) {
+
         let imp = self.imp();
         let notebook = &imp.notebook;
         let ucm = UserContentManager::new();
         let webview: WebView = Object::builder()
             .property("user-content-manager", &ucm)
             .build();
-
+        self.track_memory_usage(&webview);  
+        self.track_cpu_usage(&webview);
         let webview_c = webview.clone();
 
         ucm.register_script_message_handler("editState", None);
@@ -647,11 +529,147 @@ impl Window {
             &[],
         );
         ucm.add_script(&script);
+        // Register FCP message handler  
+        ucm.register_script_message_handler("fcp", None);  
+        
+        // Inject FCP measurement script  
+        let fcp_js = r#"  
+            (function() {  
+                if (window.__fcp_measured) return;  
+                window.__fcp_measured = true;  
+                
+                new PerformanceObserver((list) => {  
+                    for (const entry of list.getEntries()) {  
+                        if (entry.name === 'first-contentful-paint') {  
+                            window.webkit.messageHandlers.fcp.postMessage(entry.startTime);  
+                            break;  
+                        }  
+                    }  
+                }).observe({entryTypes: ['paint']});  
+            })();  
+        "#;  
+        
+        let fcp_script = UserScript::new(  
+            fcp_js,  
+            webkit6::UserContentInjectedFrames::AllFrames,  
+            webkit6::UserScriptInjectionTime::Start,  
+            &[],  
+            &[],  
+        );  
+        ucm.add_script(&fcp_script);  
+        
+        // Connect FCP message handler  
+    ucm.connect_script_message_received(Some("fcp"), glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_ucm, message| {
+            let fcp_time = message.to_double();
+            println!("FCP: {:.2}ms", fcp_time);
+            // Store or log the FCP timing
+        }
+    ));
 
+    // Register TTI message handler  
+ucm.register_script_message_handler("tti", None);  
+  
+// Inject TTI measurement script  
+// Replace your TTI script with this corrected version:
+let tti_js = r#"  
+    (function() {  
+        if (window.__tti_measured) return;  
+        window.__tti_measured = true;  
+          
+        let lastLongTaskEnd = 0;  
+        let ttiDetected = false;  
+        let fcpTime = 0;
+          
+        // Monitor long tasks (blocking tasks > 50ms)  
+        new PerformanceObserver((list) => {  
+            for (const entry of list.getEntries()) {  
+                if (entry.duration > 50) {  
+                    lastLongTaskEnd = entry.startTime + entry.duration;  
+                }  
+            }  
+        }).observe({entryTypes: ['longtask']});  
+          
+        // Check for TTI every 100ms  
+        const checkTTI = () => {  
+            if (ttiDetected) return;  
+              
+            const now = performance.now();  
+            const timeSinceLastLongTask = now - lastLongTaskEnd;  
+              
+            // Consider interactive if no long tasks for 5 seconds and DOM is loaded  
+            if (timeSinceLastLongTask >= 5000 && document.readyState === 'complete') {  
+                ttiDetected = true;
+                // Report the TTI time (max of lastLongTaskEnd or FCP)
+                const ttiTime = Math.max(lastLongTaskEnd, fcpTime);
+                window.webkit.messageHandlers.tti.postMessage(ttiTime);  
+            } else {  
+                requestAnimationFrame(checkTTI);  
+            }  
+        };  
+          
+        // Start checking after FCP  
+        new PerformanceObserver((list) => {  
+            for (const entry of list.getEntries()) {  
+                if (entry.name === 'first-contentful-paint') {
+                    fcpTime = entry.startTime;
+                    requestAnimationFrame(checkTTI);  
+                    break;  
+                }  
+            }  
+        }).observe({entryTypes: ['paint']});  
+    })();  
+"#;
+  
+let tti_script = UserScript::new(  
+    tti_js,  
+    webkit6::UserContentInjectedFrames::AllFrames,  
+    webkit6::UserScriptInjectionTime::Start,  
+    &[],  
+    &[],  
+);  
+ucm.add_script(&tti_script);  
+  
+// Connect TTI message handler  
+ucm.connect_script_message_received(Some("tti"), glib::clone!(  
+    #[weak(rename_to = window)]  
+    self,  
+    move |_ucm, message| {   
+        let tti_time = message.to_double();  
+        println!("TTI: {:.2}ms", tti_time);  
+        // Store or log the TTI timing
+    }  
+));
         webview.set_vexpand(true);
         webview.set_hexpand(true);
 
         webview.load_uri(uri);
+
+        webview.connect_load_changed(glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_webview, event| {
+            match event {
+                webkit6::LoadEvent::Started => {
+                    let start = std::time::Instant::now();
+                    unsafe {
+                        _webview.set_data("load_start", start);
+                    }
+                }
+                webkit6::LoadEvent::Finished => {
+                    unsafe {
+                        if let Some(start_ptr) = _webview.data::<std::time::Instant>("load_start") {
+                            let duration = start_ptr.as_ref().elapsed();
+                            println!("Page load time: {:?}", duration);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+));
 
         let page_num = notebook.append_page(&webview, gtk4::Widget::NONE);
         notebook.set_current_page(Some(page_num));
@@ -714,7 +732,7 @@ impl Window {
         imp.tab_label.set_label(&tab_text);
     }
 
-    fn cycle_tab(&self, forward: bool) {
+    pub fn cycle_tab(&self, forward: bool) {
         let imp = self.imp();
         let notebook = &imp.notebook;
 
