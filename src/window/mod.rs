@@ -16,10 +16,12 @@ use gtk4::{
         ListBoxRowExt as _, WidgetExt as _,
     },
 };
+use std::fs;
 use rand::Rng as _;
 use webkit6::{UserContentManager, UserScript, WebView, prelude::WebViewExt};
 use crate::shortcuts;
 use notify_rust::Notification;
+use std::time::{Duration, Instant};
 
 glib::wrapper! {
     pub struct Window(ObjectSubclass<imp::Window>)
@@ -40,6 +42,79 @@ pub enum PaletteAction {
 pub struct ActionWrapper(pub(crate) PaletteAction);
 
 impl Window {
+
+    fn get_memory_usage(&self) -> Option<u64> {  
+        let status = fs::read_to_string(format!("/proc/{}/status", std::process::id())).ok()?;  
+        for line in status.lines() {  
+            if line.starts_with("VmRSS:") {  
+                let parts: Vec<&str> = line.split_whitespace().collect();  
+                if parts.len() >= 2 {  
+                    return parts[1].parse::<u64>().ok().map(|kb| kb * 1024); // Convert to bytes  
+                }  
+            }  
+        }  
+        None  
+    }  
+  
+    fn track_memory_usage(&self, webview: &WebView) {  
+        let initial_memory = self.get_memory_usage();  
+        unsafe { webview.set_data("initial_memory", initial_memory) };  
+  
+    webview.connect_load_changed(glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_webview, event| {
+            if let webkit6::LoadEvent::Finished = event {
+                if let Some(current_memory) = window.get_memory_usage() {
+                    unsafe {
+                        if let Some(initial_ptr) = _webview.data::<u64>("initial_memory") {
+                            let initial = initial_ptr.as_ref();
+                            let delta = current_memory.saturating_sub(*initial);
+                            println!("Memory: {} bytes (+{} delta)", current_memory, delta);
+                        }
+                    }
+                }
+            }
+        }
+    ));
+    }  
+
+
+    fn get_cpu_usage(&self) -> Option<Duration> {  
+        let usage = fs::read_to_string(format!("/proc/{}/stat", std::process::id())).ok()?;  
+        let parts: Vec<&str> = usage.split_whitespace().collect();  
+        if parts.len() >= 17 {  
+            let utime: u64 = parts[13].parse().ok()?;  
+            let stime: u64 = parts[14].parse().ok()?;  
+            let total_ticks = utime + stime;  
+            // Convert to nanoseconds (assuming 100Hz tick rate)  
+            Some(Duration::from_nanos(total_ticks * 10_000_000))  
+        } else {  
+            None  
+        }  
+    }  
+  
+    fn track_cpu_usage(&self, webview: &WebView) {  
+        let start_cpu = self.get_cpu_usage();  
+        let start_time = Instant::now();  
+          
+        webview.connect_load_changed(glib::clone!(  
+            #[weak(rename_to = window)]  
+            self,  
+            move |_webview, event| {  
+                if let webkit6::LoadEvent::Finished = event {  
+                    if let Some(end_cpu) = window.get_cpu_usage() {  
+                        if let Some(start_cpu) = start_cpu {  
+                            let elapsed = start_time.elapsed();  
+                            let cpu_time = end_cpu.saturating_sub(start_cpu);  
+                            let cpu_percent = (cpu_time.as_secs_f64() / elapsed.as_secs_f64()) * 100.0;  
+                            println!("CPU Usage: {:.1}% over {:?}", cpu_percent, elapsed);  
+                        }  
+                    }  
+                }  
+            }  
+        ));  
+    }  
     pub fn new(app: &Application) -> Self {
         Object::builder().property("application", app).build()
     }
@@ -285,13 +360,15 @@ impl Window {
     }
 
     pub fn new_tab(&self, uri: &str) {
+
         let imp = self.imp();
         let notebook = &imp.notebook;
         let ucm = UserContentManager::new();
         let webview: WebView = Object::builder()
             .property("user-content-manager", &ucm)
             .build();
-
+        self.track_memory_usage(&webview);  
+        self.track_cpu_usage(&webview);
         let webview_c = webview.clone();
 
         ucm.register_script_message_handler("editState", None);
@@ -452,11 +529,147 @@ impl Window {
             &[],
         );
         ucm.add_script(&script);
+        // Register FCP message handler  
+        ucm.register_script_message_handler("fcp", None);  
+        
+        // Inject FCP measurement script  
+        let fcp_js = r#"  
+            (function() {  
+                if (window.__fcp_measured) return;  
+                window.__fcp_measured = true;  
+                
+                new PerformanceObserver((list) => {  
+                    for (const entry of list.getEntries()) {  
+                        if (entry.name === 'first-contentful-paint') {  
+                            window.webkit.messageHandlers.fcp.postMessage(entry.startTime);  
+                            break;  
+                        }  
+                    }  
+                }).observe({entryTypes: ['paint']});  
+            })();  
+        "#;  
+        
+        let fcp_script = UserScript::new(  
+            fcp_js,  
+            webkit6::UserContentInjectedFrames::AllFrames,  
+            webkit6::UserScriptInjectionTime::Start,  
+            &[],  
+            &[],  
+        );  
+        ucm.add_script(&fcp_script);  
+        
+        // Connect FCP message handler  
+    ucm.connect_script_message_received(Some("fcp"), glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_ucm, message| {
+            let fcp_time = message.to_double();
+            println!("FCP: {:.2}ms", fcp_time);
+            // Store or log the FCP timing
+        }
+    ));
 
+    // Register TTI message handler  
+ucm.register_script_message_handler("tti", None);  
+  
+// Inject TTI measurement script  
+// Replace your TTI script with this corrected version:
+let tti_js = r#"  
+    (function() {  
+        if (window.__tti_measured) return;  
+        window.__tti_measured = true;  
+          
+        let lastLongTaskEnd = 0;  
+        let ttiDetected = false;  
+        let fcpTime = 0;
+          
+        // Monitor long tasks (blocking tasks > 50ms)  
+        new PerformanceObserver((list) => {  
+            for (const entry of list.getEntries()) {  
+                if (entry.duration > 50) {  
+                    lastLongTaskEnd = entry.startTime + entry.duration;  
+                }  
+            }  
+        }).observe({entryTypes: ['longtask']});  
+          
+        // Check for TTI every 100ms  
+        const checkTTI = () => {  
+            if (ttiDetected) return;  
+              
+            const now = performance.now();  
+            const timeSinceLastLongTask = now - lastLongTaskEnd;  
+              
+            // Consider interactive if no long tasks for 5 seconds and DOM is loaded  
+            if (timeSinceLastLongTask >= 5000 && document.readyState === 'complete') {  
+                ttiDetected = true;
+                // Report the TTI time (max of lastLongTaskEnd or FCP)
+                const ttiTime = Math.max(lastLongTaskEnd, fcpTime);
+                window.webkit.messageHandlers.tti.postMessage(ttiTime);  
+            } else {  
+                requestAnimationFrame(checkTTI);  
+            }  
+        };  
+          
+        // Start checking after FCP  
+        new PerformanceObserver((list) => {  
+            for (const entry of list.getEntries()) {  
+                if (entry.name === 'first-contentful-paint') {
+                    fcpTime = entry.startTime;
+                    requestAnimationFrame(checkTTI);  
+                    break;  
+                }  
+            }  
+        }).observe({entryTypes: ['paint']});  
+    })();  
+"#;
+  
+let tti_script = UserScript::new(  
+    tti_js,  
+    webkit6::UserContentInjectedFrames::AllFrames,  
+    webkit6::UserScriptInjectionTime::Start,  
+    &[],  
+    &[],  
+);  
+ucm.add_script(&tti_script);  
+  
+// Connect TTI message handler  
+ucm.connect_script_message_received(Some("tti"), glib::clone!(  
+    #[weak(rename_to = window)]  
+    self,  
+    move |_ucm, message| {   
+        let tti_time = message.to_double();  
+        println!("TTI: {:.2}ms", tti_time);  
+        // Store or log the TTI timing
+    }  
+));
         webview.set_vexpand(true);
         webview.set_hexpand(true);
 
         webview.load_uri(uri);
+
+        webview.connect_load_changed(glib::clone!(
+        #[weak(rename_to = window)]
+        self,
+        move |_webview, event| {
+            match event {
+                webkit6::LoadEvent::Started => {
+                    let start = std::time::Instant::now();
+                    unsafe {
+                        _webview.set_data("load_start", start);
+                    }
+                }
+                webkit6::LoadEvent::Finished => {
+                    unsafe {
+                        if let Some(start_ptr) = _webview.data::<std::time::Instant>("load_start") {
+                            let duration = start_ptr.as_ref().elapsed();
+                            println!("Page load time: {:?}", duration);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+));
 
         let page_num = notebook.append_page(&webview, gtk4::Widget::NONE);
         notebook.set_current_page(Some(page_num));
